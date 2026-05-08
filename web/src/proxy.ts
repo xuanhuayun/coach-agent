@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const user = process.env.COACH_APP_USER;
   const pass = process.env.COACH_APP_PASS;
   if (!user || !pass) return NextResponse.next();
