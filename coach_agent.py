@@ -16,6 +16,11 @@ except Exception:  # pragma: no cover
     load_dotenv = None  # type: ignore[assignment]
 
 try:
+    from supabase import create_client as _supa_create_client
+except Exception:  # pragma: no cover
+    _supa_create_client = None  # type: ignore[assignment]
+
+try:
     from openai import OpenAI
 except Exception:  # pragma: no cover
     OpenAI = None  # type: ignore[assignment]
@@ -24,6 +29,53 @@ DB_FILE = Path("coach_data.json")
 
 SCHEMA_VERSION = 1
 BASE_LESSON_MINUTES = 120  # legacy baseline; keep for migrating older data
+
+
+def _supabase_client():
+    """
+    Use Supabase (PostgREST) when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set.
+    This lets Render/production run without local coach_data.json.
+    """
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not url or not key or _supa_create_client is None:
+        return None
+    try:
+        return _supa_create_client(url, key)
+    except Exception:
+        return None
+
+
+_SUPA_LAST_IDS: dict[str, set[str]] = {}
+
+
+def _supa_table_rows(supa, table: str) -> list[dict[str, Any]]:
+    try:
+        res = supa.table(table).select("*").execute()
+        data = getattr(res, "data", None)
+        if isinstance(data, list):
+            return [r for r in data if isinstance(r, dict)]
+    except Exception:
+        pass
+    return []
+
+
+def _supa_upsert_many(supa, table: str, rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
+    # Supabase Python client will JSON-encode list/dict for jsonb columns.
+    supa.table(table).upsert(rows).execute()
+
+
+def _supa_delete_missing(supa, table: str, prev_ids: set[str], next_ids: set[str]) -> None:
+    missing = [i for i in prev_ids if i not in next_ids]
+    if not missing:
+        return
+    # Delete in chunks to avoid URL length limits.
+    chunk = 200
+    for i in range(0, len(missing), chunk):
+        part = missing[i : i + chunk]
+        supa.table(table).delete().in_("id", part).execute()
 
 
 def _baseline_minutes_for_class_type(code: str) -> int:
@@ -1300,6 +1352,27 @@ If a field is not mentioned, use "未说明".
 
 
 def load_db() -> dict[str, Any]:
+    supa = _supabase_client()
+    if supa is not None:
+        data = _ensure_v1_shape({"schema_version": SCHEMA_VERSION})
+        data["students"] = _supa_table_rows(supa, "students")
+        data["lesson_types"] = _supa_table_rows(supa, "lesson_types")
+        data["lessons"] = _supa_table_rows(supa, "lessons")
+        data["coaches"] = _supa_table_rows(supa, "coaches")
+        data["payments"] = _supa_table_rows(supa, "payments")
+
+        # Remember ids for best-effort deletions in save_db().
+        _SUPA_LAST_IDS["students"] = {str(r.get("id")) for r in data["students"] if isinstance(r, dict) and r.get("id")}
+        _SUPA_LAST_IDS["lesson_types"] = {str(r.get("id")) for r in data["lesson_types"] if isinstance(r, dict) and r.get("id")}
+        _SUPA_LAST_IDS["lessons"] = {str(r.get("id")) for r in data["lessons"] if isinstance(r, dict) and r.get("id")}
+        _SUPA_LAST_IDS["coaches"] = {str(r.get("id")) for r in data["coaches"] if isinstance(r, dict) and r.get("id")}
+        _SUPA_LAST_IDS["payments"] = {str(r.get("id")) for r in data["payments"] if isinstance(r, dict) and r.get("id")}
+
+        if _clean_db(data):
+            # Persist any normalization to Supabase as well (e.g., class_type colon fixes).
+            save_db(data)
+        return data
+
     if DB_FILE.exists():
         with open(DB_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -1318,6 +1391,39 @@ def load_db() -> dict[str, Any]:
 
 
 def save_db(db: dict[str, Any]) -> None:
+    supa = _supabase_client()
+    if supa is not None:
+        # Upsert all tables (best-effort). This keeps Flask behavior consistent with JSON mode.
+        students = [r for r in db.get("students", []) if isinstance(r, dict)]
+        lesson_types = [r for r in db.get("lesson_types", []) if isinstance(r, dict)]
+        lessons = [r for r in db.get("lessons", []) if isinstance(r, dict)]
+        coaches = [r for r in db.get("coaches", []) if isinstance(r, dict)]
+        payments = [r for r in db.get("payments", []) if isinstance(r, dict)]
+
+        _supa_upsert_many(supa, "students", students)
+        _supa_upsert_many(supa, "lesson_types", lesson_types)
+        _supa_upsert_many(supa, "lessons", lessons)
+        _supa_upsert_many(supa, "coaches", coaches)
+        _supa_upsert_many(supa, "payments", payments)
+
+        # Best-effort deletion support (only if we previously loaded from Supabase in this process).
+        try:
+            _supa_delete_missing(supa, "students", _SUPA_LAST_IDS.get("students", set()), {str(r.get("id")) for r in students if r.get("id")})
+            _supa_delete_missing(supa, "lesson_types", _SUPA_LAST_IDS.get("lesson_types", set()), {str(r.get("id")) for r in lesson_types if r.get("id")})
+            _supa_delete_missing(supa, "lessons", _SUPA_LAST_IDS.get("lessons", set()), {str(r.get("id")) for r in lessons if r.get("id")})
+            _supa_delete_missing(supa, "coaches", _SUPA_LAST_IDS.get("coaches", set()), {str(r.get("id")) for r in coaches if r.get("id")})
+            _supa_delete_missing(supa, "payments", _SUPA_LAST_IDS.get("payments", set()), {str(r.get("id")) for r in payments if r.get("id")})
+        except Exception:
+            pass
+
+        # Refresh last ids snapshot.
+        _SUPA_LAST_IDS["students"] = {str(r.get("id")) for r in students if r.get("id")}
+        _SUPA_LAST_IDS["lesson_types"] = {str(r.get("id")) for r in lesson_types if r.get("id")}
+        _SUPA_LAST_IDS["lessons"] = {str(r.get("id")) for r in lessons if r.get("id")}
+        _SUPA_LAST_IDS["coaches"] = {str(r.get("id")) for r in coaches if r.get("id")}
+        _SUPA_LAST_IDS["payments"] = {str(r.get("id")) for r in payments if r.get("id")}
+        return
+
     tmp = DB_FILE.with_suffix(".json.tmp")
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
@@ -1482,6 +1588,21 @@ def _lesson_is_fully_paid(db: dict[str, Any], lesson: dict[str, Any]) -> bool:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key-change-me")
+
+@app.before_request
+def _basic_auth_if_configured():
+    user = (os.environ.get("COACH_APP_USER") or "").strip()
+    pw = (os.environ.get("COACH_APP_PASS") or "").strip()
+    if not user or not pw:
+        return None
+    auth = request.authorization
+    if auth and auth.username == user and auth.password == pw:
+        return None
+    return (
+        "Authentication required",
+        401,
+        {"WWW-Authenticate": 'Basic realm="Coach Agent"'},
+    )
 
 
 def get_lesson_or_404(db: dict[str, Any], lesson_id: str) -> dict[str, Any]:
