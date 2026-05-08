@@ -9,6 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const today = todayKey();
   const supa = supabaseAdmin();
+  const supabaseConfigured = !!process.env.SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const source: "supabase" | "local" = supa ? "supabase" : "local";
+  let loadError: string | null = null;
 
   let todays: Lesson[] = [];
   let studentById = new Map<string, Student>();
@@ -17,20 +20,31 @@ export default async function Home() {
   const lessonTypePrices: Record<string, { price_per_lesson: number; currency: string }> = {};
 
   if (supa) {
-    const [{ data: lessons }, { data: studentsData }, { data: lessonTypes }, { data: coaches }] = await Promise.all([
+    const [
+      lessonsRes,
+      studentsRes,
+      lessonTypesRes,
+      coachesRes,
+    ] = await Promise.all([
       supa.from("lessons").select("*").like("start_at", `${today}%`),
       supa.from("students").select("*"),
       supa.from("lesson_types").select("*"),
       supa.from("coaches").select("*").limit(1),
     ]);
-    todays = (lessons || []) as Lesson[];
+    if (lessonsRes.error) loadError = lessonsRes.error.message;
+    if (studentsRes.error) loadError = loadError || studentsRes.error.message;
+    if (lessonTypesRes.error) loadError = loadError || lessonTypesRes.error.message;
+    if (coachesRes.error) loadError = loadError || coachesRes.error.message;
+
+    todays = ((lessonsRes.data || []) as Lesson[]).filter(Boolean);
     todays.sort((a, b) => String(a.start_at || "").localeCompare(String(b.start_at || "")));
-    students = (studentsData || []) as Student[];
+    students = ((studentsRes.data || []) as Student[]).filter(Boolean);
     studentById = new Map(students.map((s) => [String(s.id), s]));
+    const coaches = coachesRes.data || [];
     const coach0: any = Array.isArray(coaches) && coaches.length ? coaches[0] : null;
     const v = Array.isArray(coach0?.venues) ? coach0.venues : [];
     venues = v.map((x: any) => String(x || "")).filter((x: string) => x.trim());
-    for (const lt of (lessonTypes || []) as any[]) {
+    for (const lt of (lessonTypesRes.data || []) as any[]) {
       const code = String(lt?.code || "");
       if (!code) continue;
       lessonTypePrices[code] = {
@@ -64,6 +78,16 @@ export default async function Home() {
           <Link href="/">Home</Link>
         </div>
       </div>
+      <div className="hint" style={{ marginTop: 8 }}>
+        数据来源：{source === "supabase" ? "Supabase" : "本地 coach_data.json"} · 今日课程：{todays.length} · 学员：{students.length}
+      </div>
+      {!supabaseConfigured ? (
+        <div style={{ marginTop: 10, color: "#ff6b6b" }}>
+          未配置 Supabase 环境变量（`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`）。线上会显示空；请在 Vercel Project → Settings → Environment Variables
+          配好后重新部署。
+        </div>
+      ) : null}
+      {loadError ? <div style={{ marginTop: 10, color: "#ff6b6b" }}>Supabase 读取失败：{loadError}</div> : null}
 
       <section style={{ marginTop: 16 }}>
         <SmartLessonForm
