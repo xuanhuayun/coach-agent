@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}学员{% else %}Students{% endif %}{% endblock %}
+
+{% block content %}
+  <style>
+    .tabs{display:flex; gap:8px; flex-wrap:wrap}
+    .tab{padding:8px 12px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.04)}
+    .tab.active{border-color:rgba(122,162,255,.45); background:rgba(122,162,255,.16)}
+    .kpi{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .dot{width:10px; height:10px; border-radius:999px; display:inline-block; border:1px solid var(--line)}
+    .dot.on{background:rgba(68,215,168,.9); border-color:rgba(68,215,168,.35)}
+    .dot.off{background:rgba(255,107,107,.9); border-color:rgba(255,107,107,.35)}
+    .full-bleed{margin-left:-24px; margin-right:-24px}
+    @media (max-width: 600px){
+      .full-bleed{margin-left:-12px; margin-right:-12px}
+    }
+    .scroll-x{overflow:auto; -webkit-overflow-scrolling:touch; border-radius:0; border:0}
+  </style>
+
+  <div class="card">
+    <div class="row">
+      <h2>{% if current_lang == "zh" %}学员{% else %}Students{% endif %}</h2>
+      <div class="kpi">
+        <a class="btn" href="{{ url_for('add_student') }}">{% if current_lang == "zh" %}新增学员{% else %}Add{% endif %}</a>
+      </div>
+    </div>
+
+    <div class="row" style="align-items:flex-end">
+      <div class="tabs">
+        <a class="tab {% if tab!='inactive' %}active{% endif %}" href="{{ url_for('students_hub', tab='active', q=q, sort=sort) }}">
+          {% if current_lang == "zh" %}活跃学员{% else %}Active{% endif %}
+        </a>
+        <a class="tab {% if tab=='inactive' %}active{% endif %}" href="{{ url_for('students_hub', tab='inactive', q=q, sort=sort) }}">
+          {% if current_lang == "zh" %}不活跃{% else %}Inactive{% endif %}
+        </a>
+      </div>
+
+      <form method="get" action="{{ url_for('students_hub') }}" style="display:flex; gap:8px; flex-wrap:wrap">
+        <input type="hidden" name="tab" value="{{ tab }}" />
+        <input id="qInput" name="q" value="{{ q }}" placeholder="{% if current_lang == 'zh' %}搜索姓名/联系方式{% else %}Search name/contact{% endif %}" />
+        <select id="sortSelect" name="sort">
+          <option value="recent" {% if sort!='count' %}selected{% endif %}>{% if current_lang=='zh' %}按最近上课{% else %}Most recent{% endif %}</option>
+          <option value="count" {% if sort=='count' %}selected{% endif %}>{% if current_lang=='zh' %}按上课次数{% else %}Most lessons{% endif %}</option>
+        </select>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>{% if current_lang == "zh" %}列表{% else %}List{% endif %}</h2>
+    {% if rows|length == 0 %}
+      <p class="muted">{% if current_lang == "zh" %}暂无学员{% else %}No students{% endif %}</p>
+    {% else %}
+      <style>
+        .students-pager{display:flex; overflow:auto; gap:12px; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch}
+        .students-page{min-width:100%; scroll-snap-align:start}
+        /* Give first column breathing room in full-bleed table */
+        .students-page .table th:first-child,
+        .students-page .table td:first-child{padding-left:16px}
+      </style>
+
+      <div class="full-bleed">
+        <div class="students-pager" aria-label="Students pager">
+          {% for i in range(0, rows|length, 10) %}
+            <div class="students-page">
+              <div class="scroll-x" style="border-top:1px solid var(--line); border-bottom:1px solid var(--line);">
+                <table class="table" style="min-width:920px; margin:0">
+                  <thead>
+                    <tr>
+                      <th>{% if current_lang == "zh" %}姓名{% else %}Name{% endif %}</th>
+                      <th>{% if current_lang == "zh" %}最近上课{% else %}Last lesson{% endif %}</th>
+                      <th>{% if current_lang == "zh" %}累计次数{% else %}Total lessons{% endif %}</th>
+                      <th>{% if current_lang == "zh" %}10天{% else %}10d{% endif %}</th>
+                      <th>{% if current_lang == "zh" %}20天{% else %}20d{% endif %}</th>
+                      <th>{% if current_lang == "zh" %}30天{% else %}30d{% endif %}</th>
+                      <th>{% if current_lang == "zh" %}记录{% else %}Progress{% endif %}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for s in rows[i:i+10] %}
+                      <tr>
+                        <td><a href="{{ url_for('edit_student', student_id=s.id) }}">{{ s.name }}</a></td>
+                        <td class="muted">{{ s.last_at }}</td>
+                        <td class="muted">{{ s.count }}</td>
+                        <td><span class="dot {% if s.has_10 %}on{% else %}off{% endif %}"></span></td>
+                        <td><span class="dot {% if s.has_20 %}on{% else %}off{% endif %}"></span></td>
+                        <td><span class="dot {% if s.has_30 %}on{% else %}off{% endif %}"></span></td>
+                        <td><a href="{{ url_for('student_progress', name=s.name) }}">{% if current_lang == "zh" %}查看{% else %}View{% endif %}</a></td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              <div class="muted" style="font-size:12px; margin-top:8px">
+                {% if current_lang == "zh" %}
+                  左右滑动加载更多（第 {{ (i//10)+1 }} / {{ ((rows|length + 9)//10) }} 页）
+                {% else %}
+                  Swipe to load more (Page {{ (i//10)+1 }} / {{ ((rows|length + 9)//10) }})
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      const form = document.querySelector('form[action="{{ url_for("students_hub") }}"]');
+      const q = document.getElementById('qInput');
+      const sort = document.getElementById('sortSelect');
+      if (!form) return;
+
+      let t = null;
+      function debounceSubmit() {
+        if (t) clearTimeout(t);
+        t = setTimeout(() => form.submit(), 250);
+      }
+      if (q) q.addEventListener('input', debounceSubmit);
+      if (sort) sort.addEventListener('change', () => form.submit());
+    })();
+  </script>
+{% endblock %}
+

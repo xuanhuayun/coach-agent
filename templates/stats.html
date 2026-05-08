@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}财务统计{% else %}Stats{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="row">
+      <h2>{% if current_lang == "zh" %}财务统计{% else %}Financial Stats{% endif %}</h2>
+      <div class="muted">{% if current_lang == "zh" %}按课程时长计时；1对多也只算一次时间{% else %}Hours counted once per lesson (group lessons included){% endif %}</div>
+    </div>
+
+    <form class="form" method="get" action="{{ url_for('stats') }}">
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px">
+        <div class="field">
+          <label>{% if current_lang == "zh" %}时间范围{% else %}Range{% endif %}</label>
+          <select name="range" id="rangeSelect">
+            <option value="month" {% if range_key=='month' %}selected{% endif %}>{% if current_lang == "zh" %}当月{% else %}This month{% endif %}</option>
+            <option value="ytd" {% if range_key=='ytd' %}selected{% endif %}>{% if current_lang == "zh" %}年初至今{% else %}Year to date{% endif %}</option>
+            <option value="3m" {% if range_key=='3m' %}selected{% endif %}>{% if current_lang == "zh" %}最近三个月{% else %}Last 3 months{% endif %}</option>
+            <option value="6m" {% if range_key=='6m' %}selected{% endif %}>{% if current_lang == "zh" %}最近半年{% else %}Last 6 months{% endif %}</option>
+            <option value="12m" {% if range_key=='12m' %}selected{% endif %}>{% if current_lang == "zh" %}最近一年{% else %}Last 12 months{% endif %}</option>
+            <option value="all" {% if range_key=='all' %}selected{% endif %}>{% if current_lang == "zh" %}全部{% else %}All time{% endif %}</option>
+            <option value="custom" {% if range_key=='custom' %}selected{% endif %}>{% if current_lang == "zh" %}自定义{% else %}Custom{% endif %}</option>
+          </select>
+        </div>
+        <div class="field" id="customRange">
+          <label>{% if current_lang == "zh" %}自定义起止{% else %}Custom start/end{% endif %}</label>
+          <div class="grid" style="grid-template-columns: 1fr 1fr; gap:8px">
+            <input name="start" value="{{ start }}" placeholder="YYYY-MM-DD" />
+            <input name="end" value="{{ end }}" placeholder="YYYY-MM-DD" />
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>{% if current_lang == "zh" %}总计{% else %}Totals{% endif %}</h2>
+      <table class="table">
+        <tbody>
+          <tr><th>{% if current_lang == "zh" %}课程费{% else %}Fee{% endif %}</th><td>{{ "%.2f"|format(totals.fee) }} SGD</td></tr>
+          <tr><th>{% if current_lang == "zh" %}小时数{% else %}Hours{% endif %}</th><td>{{ "%.2f"|format(totals.hours) }}</td></tr>
+          <tr><th>{% if current_lang == "zh" %}课程数{% else %}Lessons{% endif %}</th><td>{{ totals.lessons }}</td></tr>
+          <tr><th>{% if current_lang == "zh" %}学员数{% else %}Students{% endif %}</th><td>{{ totals.students }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <h2>{% if current_lang == "zh" %}月度趋势{% else %}Monthly trend{% endif %}</h2>
+        <form method="get" action="{{ url_for('stats') }}" class="row" style="gap:8px; justify-content:flex-end">
+          <input type="hidden" name="range" value="{{ range_key }}" />
+          <input type="hidden" name="start" value="{{ start }}" />
+          <input type="hidden" name="end" value="{{ end }}" />
+          <select name="month" id="monthSelect" style="max-width:200px">
+            {% for m in month_options %}
+              <option value="{{ m }}" {% if m==leaderboard_month %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+      <canvas id="trend" height="160"></canvas>
+      <p id="chartHint" class="muted mini" style="display:none"></p>
+      <div class="row" style="justify-content:flex-start; margin-top:10px">
+        <a class="btn" href="{{ url_for('monthly_lessons', month=leaderboard_month) }}">
+          {% if current_lang == "zh" %}查看本月课程明细{% else %}View this month’s lesson list{% endif %}
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>{% if current_lang == "zh" %}今日{% else %}Today{% endif %}</h2>
+      <table class="table">
+        <tbody>
+          <tr><th>{% if current_lang == "zh" %}今日收入{% else %}Revenue{% endif %}</th><td>{{ "%.2f"|format(today.fee) }} SGD</td></tr>
+          <tr><th>{% if current_lang == "zh" %}今日小时数{% else %}Hours{% endif %}</th><td>{{ "%.2f"|format(today.hours) }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>{% if current_lang == "zh" %}本月最勤快学员（按小时 Top 5）{% else %}Most active students this month (Top 5 by hours){% endif %}</h2>
+    {% if most_active|length == 0 %}
+      <p class="muted">{% if current_lang == "zh" %}暂无数据{% else %}No data{% endif %}</p>
+    {% else %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>{% if current_lang == "zh" %}学员{% else %}Student{% endif %}</th>
+            <th>{% if current_lang == "zh" %}小时数{% else %}Hours{% endif %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in most_active %}
+            <tr>
+              <td class="muted">{{ loop.index }}</td>
+              <td>{{ r.student }}</td>
+              <td class="muted">{{ "%.2f"|format(r.hours) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <h2>{% if current_lang == "zh" %}未付款（本月）{% else %}Unpaid (this month){% endif %}</h2>
+    </div>
+    {% if unpaid|length == 0 %}
+      <p class="muted">{% if current_lang == "zh" %}暂无未付款记录{% else %}No unpaid records{% endif %}</p>
+    {% else %}
+      <style>
+        .pager{display:flex; overflow:auto; gap:12px; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch}
+        .page{min-width:100%; scroll-snap-align:start}
+        .mini{font-size:12px}
+      </style>
+
+      <div class="pager" aria-label="Unpaid pager">
+        {% for i in range(0, unpaid|length, 5) %}
+          <div class="page">
+            <div style="overflow:auto; border-radius:12px; border:1px solid var(--line)">
+              <table class="table" style="min-width:760px">
+                <thead>
+                  <tr>
+                    <th>{% if current_lang == "zh" %}学员{% else %}Student{% endif %}</th>
+                    <th>{% if current_lang == "zh" %}课程时间{% else %}Lesson time{% endif %}</th>
+                    <th>{% if current_lang == "zh" %}未付款{% else %}Unpaid{% endif %}</th>
+                    <th>{% if current_lang == "zh" %}课程{% else %}Lesson{% endif %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in unpaid[i:i+5] %}
+                    <tr data-lesson-id="{{ r.lesson_id }}" data-student-id="{{ r.student_id }}">
+                      <td>{{ r.student }}</td>
+                      <td class="muted">{{ (r.time or "")[:10] }}</td>
+                      <td>
+                        <button
+                          class="badge bad"
+                          type="button"
+                          title="{% if current_lang == 'zh' %}点击标记为已付款{% else %}Click to mark paid{% endif %}"
+                          data-action="mark-paid"
+                          style="cursor:pointer"
+                        >
+                          {% if current_lang == "zh" %}未付款{% else %}Unpaid{% endif %}
+                        </button>
+                      </td>
+                      <td><a href="{{ url_for('edit_lesson', lesson_id=r.lesson_id) }}">{% if current_lang == "zh" %}编辑{% else %}Edit{% endif %}</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="muted mini" style="margin-top:8px">
+              {% if current_lang == "zh" %}
+                左右滑动查看更多（第 {{ (i//5)+1 }} / {{ ((unpaid|length + 4)//5) }} 页）
+              {% else %}
+                Swipe to see more (Page {{ (i//5)+1 }} / {{ ((unpaid|length + 4)//5) }})
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>{% if current_lang == "zh" %}长期未上课提醒{% else %}Inactive lesson reminders{% endif %}</h2>
+    <p class="muted mini" style="margin-top:-6px">
+      {% if current_lang == "zh" %}
+        天数 = 最近一次上课日期距今天的天数
+      {% else %}
+        Days = days since the student's last lesson
+      {% endif %}
+    </p>
+    <div class="grid" style="grid-template-columns:1fr 1fr 1fr; gap:12px">
+      {% for threshold in [7,15,25] %}
+        <div class="card" style="padding:12px">
+          <h2 style="margin-bottom:8px">
+            {% if current_lang == "zh" %}
+              {% if threshold == 7 %}7–15天没上课{% elif threshold == 15 %}15–25天没上课{% else %}25–35天没上课{% endif %}
+            {% else %}
+              {% if threshold == 7 %}7–15 days inactive{% elif threshold == 15 %}15–25 days inactive{% else %}25–35 days inactive{% endif %}
+            {% endif %}
+          </h2>
+          {% if inactive[threshold]|length == 0 %}
+            <p class="muted">{% if current_lang == "zh" %}暂无{% else %}None{% endif %}</p>
+          {% else %}
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>{% if current_lang == "zh" %}学员{% else %}Student{% endif %}</th>
+                  <th>{% if current_lang == "zh" %}距今(天){% else %}Days since{% endif %}</th>
+                  <th>{% if current_lang == "zh" %}上次上课{% else %}Last lesson{% endif %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in inactive[threshold][:10] %}
+                  <tr>
+                    <td>{{ s.name }}</td>
+                    <td class="muted">{{ s.days }}</td>
+                    <td class="muted">{{ s.last }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    const labels = {{ rows|map(attribute='month')|list|tojson }};
+    const fees = {{ rows|map(attribute='fee')|list|tojson }};
+    const hours = {{ rows|map(attribute='hours')|list|tojson }};
+    const ctx = document.getElementById('trend');
+    const chartHint = document.getElementById('chartHint');
+    function showChartHint(msg) {
+      if (!chartHint) return;
+      chartHint.style.display = 'block';
+      chartHint.style.color = '#ff6b6b';
+      chartHint.textContent = msg;
+    }
+    if (typeof Chart === 'undefined') {
+      showChartHint('{% if current_lang == "zh" %}趋势图组件加载失败（可能网络限制无法访问 CDN），请联网或联系管理员。{% else %}Failed to load the chart component (CDN may be blocked). Please check your network or contact the administrator.{% endif %}');
+    }
+    if (ctx && labels.length) {
+      if (typeof Chart === 'undefined') {
+        // already hinted above
+      } else {
+        new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Fee', data: fees, yAxisID: 'y', borderColor: '#7aa2ff', backgroundColor: 'rgba(122,162,255,.18)' },
+            { label: 'Hours', data: hours, yAxisID: 'y1', borderColor: '#44d7a8', backgroundColor: 'rgba(68,215,168,.12)' },
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#e8eefc' } } },
+          scales: {
+            x: { ticks: { color: '#a7b4d3' }, grid: { color: 'rgba(255,255,255,.06)' } },
+            y: {
+              position: 'left',
+              ticks: { color: '#a7b4d3' },
+              title: { display: true, text: 'SGD', color: '#a7b4d3' },
+              grid: { color: 'rgba(255,255,255,.06)' }
+            },
+            y1: {
+              position: 'right',
+              ticks: { color: '#a7b4d3' },
+              title: { display: true, text: 'h', color: '#a7b4d3' },
+              grid: { drawOnChartArea: false }
+            },
+          }
+        }
+      });
+      }
+    }
+
+    // Show custom date inputs only when "custom" is selected
+    const rangeSelect = document.querySelector('select[name="range"]');
+    const customEl = document.getElementById('customRange');
+    function syncCustom() {
+      if (!rangeSelect || !customEl) return;
+      customEl.style.display = (rangeSelect.value === 'custom') ? 'block' : 'none';
+    }
+    if (rangeSelect) rangeSelect.addEventListener('change', syncCustom);
+    syncCustom();
+
+    // Auto-submit on changes (range/month/custom dates)
+    const form = rangeSelect ? rangeSelect.closest('form') : null;
+    if (rangeSelect && form) {
+      rangeSelect.addEventListener('change', () => form.submit());
+    }
+    const monthSelect = document.getElementById('monthSelect');
+    if (monthSelect && monthSelect.form) {
+      monthSelect.addEventListener('change', () => monthSelect.form.submit());
+    }
+    if (form && customEl) {
+      const inputs = customEl.querySelectorAll('input');
+      inputs.forEach((inp) => inp.addEventListener('change', () => form.submit()));
+    }
+
+    // Unpaid -> paid toggle (remove after 2s)
+    document.querySelectorAll('button[data-action="mark-paid"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const tr = btn.closest('tr');
+        if (!tr) return;
+        const lessonId = tr.getAttribute('data-lesson-id');
+        const studentId = tr.getAttribute('data-student-id');
+        if (!lessonId || !studentId) return;
+
+        btn.disabled = true;
+        btn.classList.remove('bad');
+        btn.classList.add('good');
+        btn.textContent = '{% if current_lang == "zh" %}已付款{% else %}Paid{% endif %}';
+        btn.title = '{% if current_lang == "zh" %}2秒后自动移除（或刷新后消失）{% else %}Will be removed in 2s (or after refresh){% endif %}';
+
+        try {
+          const res = await fetch('{{ url_for("mark_paid_for_student_lesson") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lesson_id: lessonId, student_id: studentId })
+          });
+          if (!res.ok) throw new Error('request failed');
+        } catch (e) {
+          // revert on failure
+          btn.disabled = false;
+          btn.classList.remove('good');
+          btn.classList.add('bad');
+          btn.textContent = '{% if current_lang == "zh" %}未付款{% else %}Unpaid{% endif %}';
+          return;
+        }
+
+        setTimeout(() => {
+          tr.style.opacity = '0';
+          tr.style.transition = 'opacity 180ms ease';
+          setTimeout(() => tr.remove(), 220);
+        }, 2000);
+      });
+    });
+  </script>
+{% endblock %}
+

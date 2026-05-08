@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}付款状态{% else %}Payments{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="grid">
+    <div class="card">
+      <div class="row">
+        <h2>{% if current_lang == "zh" %}未付款{% else %}Unpaid{% endif %}</h2>
+        <div class="muted">
+          {% if current_lang == "zh" %}
+            {{ unpaid_students|length }} 人
+          {% else %}
+            {{ unpaid_students|length }} students
+          {% endif %}
+        </div>
+      </div>
+
+      {% if unpaid_students|length == 0 %}
+        <p class="muted">{% if current_lang == "zh" %}全部已付款。{% else %}Everyone is paid.{% endif %}</p>
+      {% else %}
+        <table class="table">
+          <thead>
+            <tr>
+              <th>{% if current_lang == "zh" %}学员{% else %}Student{% endif %}</th>
+              <th>{% if current_lang == "zh" %}联系方式{% else %}Contact{% endif %}</th>
+              <th>{% if current_lang == "zh" %}操作{% else %}Action{% endif %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for name, s in unpaid_students %}
+              <tr>
+                <td><a href="{{ url_for('student_progress', name=name) }}">{{ name }}</a></td>
+                <td class="muted">{{ s.phone or "—" }}</td>
+                <td>
+                  <form method="post" action="{{ url_for('update_payment', name=name) }}">
+                    <input type="hidden" name="paid" value="yes" />
+                    <button class="btn primary" type="submit">{% if current_lang == "zh" %}标记已付款{% else %}Mark Paid{% endif %}</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <h2>{% if current_lang == "zh" %}已付款{% else %}Paid{% endif %}</h2>
+        <div class="muted">
+          {% if current_lang == "zh" %}
+            {{ paid_students|length }} 人
+          {% else %}
+            {{ paid_students|length }} students
+          {% endif %}
+        </div>
+      </div>
+
+      {% if paid_students|length == 0 %}
+        <p class="muted">{% if current_lang == "zh" %}暂无已付款学员。{% else %}No paid students yet.{% endif %}</p>
+      {% else %}
+        <table class="table">
+          <thead>
+            <tr>
+              <th>{% if current_lang == "zh" %}学员{% else %}Student{% endif %}</th>
+              <th>{% if current_lang == "zh" %}联系方式{% else %}Contact{% endif %}</th>
+              <th>{% if current_lang == "zh" %}操作{% else %}Action{% endif %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for name, s in paid_students %}
+              <tr>
+                <td><a href="{{ url_for('student_progress', name=name) }}">{{ name }}</a></td>
+                <td class="muted">{{ s.phone or "—" }}</td>
+                <td>
+                  <form method="post" action="{{ url_for('update_payment', name=name) }}">
+                    <input type="hidden" name="paid" value="no" />
+                    <button class="btn" type="submit">{% if current_lang == "zh" %}标记未付款{% else %}Mark Unpaid{% endif %}</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
+

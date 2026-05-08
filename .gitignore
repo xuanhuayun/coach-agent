@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+.env
+.env.*
+
+# Local data (do not commit real data)
+coach_data.json
+*.backup.json
+
+# Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/.env
+web/.env.*
+
+.DS_Store
+.env
+__pycache__/
+*.pyc

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}编辑学员{% else %}Edit student{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="row">
+      <h2>{% if current_lang == "zh" %}编辑学员{% else %}Edit student{% endif %}</h2>
+      <a class="btn" href="{{ url_for('students_hub') }}">{% if current_lang == "zh" %}返回列表{% else %}Back{% endif %}</a>
+    </div>
+    <p class="muted" style="margin-top:6px">
+      {% if current_lang == "zh" %}
+        为保证数据一致性与统计准确性，系统不提供删除学员功能。如需处理特殊情况，请联系管理员。
+      {% else %}
+        To keep data consistent and reports accurate, deleting students is disabled. Please contact the administrator for special cases.
+      {% endif %}
+    </p>
+
+    <form class="form" method="post" action="{{ url_for('edit_student', student_id=student.id) }}">
+      <div class="field">
+        <label>{% if current_lang == "zh" %}姓名{% else %}Name{% endif %}</label>
+        <input name="name" value="{{ student.name }}" required />
+      </div>
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}默认课程分类{% else %}Default class type{% endif %}</label>
+        <select name="default_class_type">
+          {% for ct in ["1:1","1:2","1:3","1:4"] %}
+            <option value="{{ ct }}" {% if (student.default_class_type or "1:1") == ct %}selected{% endif %}>{{ ct }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}联系方式{% else %}Contact{% endif %}</label>
+        <input name="contact" value="{{ student.contact or '' }}" />
+      </div>
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}备注{% else %}Note{% endif %}</label>
+        <textarea name="note" rows="3" placeholder="{% if current_lang == 'zh' %}例如：固定每周三 18:00{% else %}e.g. weekly Wed 18:00{% endif %}">{{ student.note or '' }}</textarea>
+      </div>
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}常用场地{% else %}Preferred venue{% endif %}</label>
+        <input list="venue_list" name="venue" value="{{ student.venue or '' }}" placeholder="{% if current_lang == 'zh' %}选择或输入场地{% else %}Choose or type a venue{% endif %}" />
+        <datalist id="venue_list">
+          {% for v in venues or [] %}
+            <option value="{{ v }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
+
+      <div class="row">
+        <a class="btn" href="{{ url_for('students_hub') }}">{% if current_lang == "zh" %}取消{% else %}Cancel{% endif %}</a>
+        <button class="btn primary" type="submit">{% if current_lang == "zh" %}保存{% else %}Save{% endif %}</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+

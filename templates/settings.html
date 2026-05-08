@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}设置{% else %}Settings{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>{% if current_lang == "zh" %}语言{% else %}Language{% endif %}</h2>
+    <form method="post" action="{{ url_for('set_language') }}" class="row" style="justify-content:flex-start; gap:10px">
+      <button class="btn {% if current_lang=='zh' %}primary{% endif %}" type="submit" name="lang" value="zh">中文</button>
+      <button class="btn {% if current_lang=='en' %}primary{% endif %}" type="submit" name="lang" value="en">English</button>
+    </form>
+    <p class="muted">{% if current_lang == "zh" %}语言会保存在当前浏览器会话中。{% else %}Language is stored in your current browser session.{% endif %}</p>
+  </div>
+
+  <div class="card">
+    <h2>{% if current_lang == "zh" %}课程分类与单价（每次课/每人）{% else %}Class types & per-lesson price (per person){% endif %}</h2>
+    <p class="muted">
+      {% if current_lang == "zh" %}
+        计价基准：1:1 按 1 小时；1:2 / 1:3 / 1:4 按 2 小时。更新设置只影响新课程，历史课程仍按当时保存的单价计算。
+      {% else %}
+        Baseline: 1:1 uses 1 hour; 1:2 / 1:3 / 1:4 use 2 hours. Changing settings only affects new lessons; historical lessons keep the price saved at the time.
+      {% endif %}
+    </p>
+
+    <form class="form" method="post" action="{{ url_for('settings') }}">
+      {% for k, v in class_types %}
+        <div class="field">
+          <label>{{ k }} {% if current_lang == "zh" %}每次课每人价格{% else %}per-lesson price (per person){% endif %} (SGD)</label>
+          <input name="price_{{ k }}" value="{{ v }}" placeholder="0" />
+        </div>
+      {% endfor %}
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}场地列表（每行一个）{% else %}Venues (one per line){% endif %}</label>
+        <textarea name="venues" rows="4" placeholder="{% if current_lang == 'zh' %}例如：\nKF\nOCBC{% else %}e.g.\nKF\nOCBC{% endif %}">{{ venues or "" }}</textarea>
+      </div>
+
+      <div class="row">
+        <button class="btn primary" type="submit">{% if current_lang == "zh" %}保存{% else %}Save{% endif %}</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+

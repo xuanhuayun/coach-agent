@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}{{ t("app_name") }}{% endblock %}
+
+{% block content %}
+  <style>
+    /* Page-specific layout improvements (mobile-first) */
+    .page-grid{display:grid; grid-template-columns: 1fr; gap:16px}
+
+    .card{box-shadow: 0 10px 30px rgba(0,0,0,.20)}
+    .card-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap}
+    .card-head h2{margin:0}
+    .subtle-actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+
+    .quick-note{display:grid; gap:10px}
+    .quick-note textarea{min-height:110px}
+    .btn.icon{gap:10px}
+    .btn.icon svg{width:16px; height:16px}
+    .btn.danger{border-color:rgba(255,107,107,.35); background:rgba(255,107,107,.10)}
+    .pill-mini{display:inline-flex; align-items:center; padding:4px 8px; border-radius:999px;
+      border:1px solid var(--line); background:rgba(255,255,255,.04); color:var(--muted); font-size:12px}
+
+    .table-wrap{width:100%; overflow:auto; border-radius:12px; border:1px solid var(--line)}
+    .table{min-width:720px}
+    @media (max-width: 920px){
+      .table{min-width:820px}
+    }
+  </style>
+
+  <div class="page-grid">
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>{% if current_lang == "zh" %}快速记录{% else %}Quick note{% endif %}</h2>
+        </div>
+        <div class="subtle-actions">
+          <span class="pill-mini">
+            {% if current_lang == "zh" %}
+              AI：{{ "已启用" if ai_enabled else "未启用" }}
+            {% else %}
+              AI: {{ "Enabled" if ai_enabled else "Disabled" }}
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
+      <form class="quick-note" method="post" action="{{ url_for('record_lesson') }}">
+        <div class="field">
+          <label>{% if current_lang == "zh" %}课程记录（必填）{% else %}Lesson text (required){% endif %}</label>
+          <textarea id="lesson_text" name="lesson_text" rows="4"
+            placeholder="{% if current_lang == 'zh' %}例如：今天Amy练了45分钟反手和高远球，整体有进步，下周重点练步伐和启动。{% else %}e.g. Today Amy trained 45 min: backhand and clears, improving overall. Next week focus on footwork and split-step.{% endif %}"
+            required></textarea>
+          <div class="row" style="justify-content:flex-start">
+            <button class="btn icon" id="voiceBtn" type="button" aria-pressed="false">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M19 11a7 7 0 0 1-14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <span id="voiceLabel">{% if current_lang == "zh" %}语音输入{% else %}Voice input{% endif %}</span>
+            </button>
+            <span class="muted" id="voiceHint" style="display:none"></span>
+            <button class="btn primary" type="submit">{% if current_lang == "zh" %}智能录入{% else %}Smart input{% endif %}</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>{% if current_lang == "zh" %}今日课程{% else %}Today’s lessons{% endif %}</h2>
+          <div class="muted">{% if current_lang == "zh" %}当天记录的课程会显示在这里，默认待付款{% else %}Today’s lessons show here. Default: pending payment{% endif %}</div>
+        </div>
+        <div class="subtle-actions">
+          <a class="btn" href="{{ url_for('record_lesson') }}">{% if current_lang == "zh" %}记录课程{% else %}Record lesson{% endif %}</a>
+        </div>
+      </div>
+
+      {% if todays_lessons|length == 0 %}
+        <p class="muted">
+          {% if current_lang == "zh" %}
+            今天还没有课程记录。去 <a href="{{ url_for('record_lesson') }}">记录课程</a>。
+          {% else %}
+            No lessons recorded today. <a href="{{ url_for('record_lesson') }}">Record a lesson</a>.
+          {% endif %}
+        </p>
+      {% else %}
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{% if current_lang == "zh" %}时间{% else %}Time{% endif %}</th>
+                <th>{% if current_lang == "zh" %}学员{% else %}Student{% endif %}</th>
+                <th>{% if current_lang == "zh" %}场地{% else %}Venue{% endif %}</th>
+                <th>{% if current_lang == "zh" %}课程分类{% else %}Class type{% endif %}</th>
+                <th>{% if current_lang == "zh" %}价格{% else %}Fee{% endif %}</th>
+                <th>{% if current_lang == "zh" %}训练{% else %}Training{% endif %}</th>
+                <th>{% if current_lang == "zh" %}付款{% else %}Payment{% endif %}</th>
+                <th>{% if current_lang == "zh" %}下次时间{% else %}Next plan time{% endif %}</th>
+                <th>{% if current_lang == "zh" %}下次计划{% else %}Next plan{% endif %}</th>
+                <th>{% if current_lang == "zh" %}编辑{% else %}Edit{% endif %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in todays_lessons %}
+                <tr>
+                  <td class="muted">{{ (l.date or "")[:10] }}</td>
+                  <td>
+                    {% if l.student %}
+                      <a href="{{ url_for('student_progress', name=l.student) }}">{{ l.student }}</a>
+                    {% else %}
+                      <span class="muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="muted">{{ l.venue or "—" }}</td>
+                  <td class="muted">{{ l.class_type or "—" }}</td>
+                  <td class="muted">
+                    {% if l.total_fee is defined and (l.total_fee or 0) > 0 %}
+                      {{ "%.0f"|format(l.total_fee) }} {{ l.currency or "SGD" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="muted">{{ l.training or "—" }}</td>
+                  <td>
+                    {% if l.paid_total and l.is_paid %}
+                      <form method="post" action="{{ url_for('mark_lesson_unpaid', lesson_id=l.id) }}" style="display:inline">
+                        <button
+                          class="badge good"
+                          type="submit"
+                          title="{% if current_lang == 'zh' %}点击标记为未付款{% else %}Click to mark unpaid{% endif %}"
+                          style="cursor:pointer"
+                        >
+                          {% if current_lang == "zh" %}已付款{% else %}Paid{% endif %}
+                        </button>
+                      </form>
+                    {% else %}
+                      <form method="post" action="{{ url_for('mark_lesson_paid', lesson_id=l.id) }}" style="display:inline">
+                        <button
+                          class="badge bad"
+                          type="submit"
+                          title="{% if current_lang == 'zh' %}点击标记为已付款{% else %}Click to mark paid{% endif %}{% if l.paid_total %} ({{ l.paid_count }}/{{ l.paid_total }}){% endif %}"
+                          style="cursor:pointer"
+                        >
+                          {% if current_lang == "zh" %}待付款{% else %}Pending{% endif %}
+                        </button>
+                      </form>
+                    {% endif %}
+                    {% if l.paid_total %}
+                      {# keep counts internal; no fraction display #}
+                    {% endif %}
+                  </td>
+                  <td class="muted">{{ l.next_plan_time or "—" }}</td>
+                  <td class="muted">{{ l.next_plan or "—" }}</td>
+                  <td><a href="{{ url_for('edit_lesson', lesson_id=l.id) }}">{% if current_lang == "zh" %}编辑{% else %}Edit{% endif %}</a></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+  <script>
+    (function () {
+      const btn = document.getElementById('voiceBtn');
+      const textarea = document.getElementById('lesson_text');
+      const hint = document.getElementById('voiceHint');
+      const label = document.getElementById('voiceLabel');
+      if (!btn || !textarea) return;
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        // Hide the button; show a red admin hint instead.
+        btn.style.display = 'none';
+        if (hint) {
+          hint.style.display = 'inline';
+          hint.style.color = '#ff6b6b';
+          hint.textContent = '{% if current_lang == "zh" %}当前浏览器不支持语音输入，请联系管理员。{% else %}Voice input is not supported in this browser. Please contact the administrator.{% endif %}';
+        }
+        return;
+      }
+
+      let recognizing = false;
+      let recognition = null;
+
+      function start() {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = '{% if current_lang == "zh" %}zh-CN{% else %}en-US{% endif %}';
+
+        recognition.onresult = (event) => {
+          let finalText = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const res = event.results[i];
+            if (res.isFinal) finalText += res[0].transcript;
+          }
+          if (finalText) {
+            const sep = textarea.value && !textarea.value.endsWith(' ') ? ' ' : '';
+            textarea.value = textarea.value + sep + finalText.trim();
+          }
+        };
+
+        recognition.onerror = () => stop();
+        recognition.onend = () => {
+          recognizing = false;
+          btn.classList.remove('danger');
+          btn.setAttribute('aria-pressed', 'false');
+          if (label) label.textContent = '{% if current_lang == "zh" %}语音输入{% else %}Voice input{% endif %}';
+        };
+
+        recognizing = true;
+        btn.classList.add('danger');
+        btn.setAttribute('aria-pressed', 'true');
+        if (label) label.textContent = '{% if current_lang == "zh" %}点击停止{% else %}Tap to stop{% endif %}';
+        recognition.start();
+      }
+
+      function stop() {
+        try { recognition && recognition.stop(); } catch (e) {}
+      }
+
+      btn.addEventListener('click', () => {
+        if (!recognizing) start();
+        else stop();
+      });
+    })();
+  </script>
+{% endblock %}

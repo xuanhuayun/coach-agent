@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}学员搜索{% else %}Student Search{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="row">
+      <h2>{% if current_lang == "zh" %}学员搜索{% else %}Student Search{% endif %}</h2>
+      <div class="muted">
+        {% if current_lang == "zh" %}
+          总学员：{{ total }}
+        {% else %}
+          Total students: {{ total }}
+        {% endif %}
+      </div>
+    </div>
+
+    <form class="form" method="get" action="{{ url_for('student_search') }}">
+      <div class="field">
+        <label>{% if current_lang == "zh" %}关键词（姓名/电话/微信）{% else %}Keyword (name/contact){% endif %}</label>
+        <input name="q" value="{{ q }}" placeholder="{% if current_lang == 'zh' %}例如：Amy / wx123{% else %}e.g. Amy / wx123{% endif %}" />
+      </div>
+      <div class="row">
+        <button class="btn primary" type="submit">{% if current_lang == "zh" %}搜索{% else %}Search{% endif %}</button>
+        <a class="btn" href="{{ url_for('student_search') }}">{% if current_lang == "zh" %}清空{% else %}Clear{% endif %}</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>{% if current_lang == "zh" %}结果{% else %}Results{% endif %}</h2>
+    {% if results|length == 0 %}
+      <p class="muted">{% if current_lang == "zh" %}没有匹配学员{% else %}No matches{% endif %}</p>
+    {% else %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>{% if current_lang == "zh" %}姓名{% else %}Name{% endif %}</th>
+            <th>{% if current_lang == "zh" %}联系方式{% else %}Contact{% endif %}</th>
+            <th>{% if current_lang == "zh" %}付款{% else %}Payment{% endif %}</th>
+            <th>{% if current_lang == "zh" %}创建时间{% else %}Created{% endif %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for name, s in results %}
+            <tr>
+              <td><a href="{{ url_for('student_progress', name=name) }}">{{ name }}</a></td>
+              <td class="muted">{{ s.phone or "—" }}</td>
+              <td>
+                {% if s.paid %}
+                  <span class="badge good">{% if current_lang == "zh" %}已付款{% else %}Paid{% endif %}</span>
+                {% else %}
+                  <span class="badge bad">{% if current_lang == "zh" %}未付款{% else %}Unpaid{% endif %}</span>
+                {% endif %}
+              </td>
+              <td class="muted">{{ s.created_at or "—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+{% endblock %}
+

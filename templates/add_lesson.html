@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}记录课程{% else %}Record Lesson{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>{% if current_lang == "zh" %}记录课程{% else %}Record Lesson{% endif %}</h2>
+    <p class="muted">
+      {% if current_lang == "zh" %}
+        直接输入一句话，系统会自动整理：学员、时长、训练内容、状态、下次计划。
+      {% else %}
+        Write one sentence. The app will parse student, duration, training, status, and next plan automatically.
+      {% endif %}
+    </p>
+    <p class="muted">
+      {% if current_lang == "zh" %}
+        AI 解析：<strong>{{ "已启用" if ai_enabled else "未启用（将回退规则解析）" }}</strong>
+      {% else %}
+        AI parsing: <strong>{{ "Enabled" if ai_enabled else "Disabled (falls back to rule-based parsing)" }}</strong>
+      {% endif %}
+    </p>
+
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form class="form" method="post" action="{{ url_for('record_lesson') }}">
+      {% if not new_student %}
+      <div class="field">
+        <label>{% if current_lang == "zh" %}选择已有学员（可选）{% else %}Select existing student (optional){% endif %}</label>
+        <select name="student_id" id="studentSelect">
+          <option value="">{% if current_lang == "zh" %}不选择（由系统识别）{% else %}None (let system detect){% endif %}</option>
+          {% for s in student_rows or [] %}
+            <option
+              value="{{ s.id }}"
+              data-default-class-type="{{ s.default_class_type }}"
+              data-venue="{{ s.venue }}"
+              {% if (form.student_id or "") == s.id %}selected{% endif %}
+            >{{ s.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="hint" id="studentDefaultsHint" style="margin-top:6px; display:none"></div>
+      </div>
+      {% endif %}
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}课程记录（必填）{% else %}Lesson text (required){% endif %}</label>
+        <textarea
+          name="lesson_text"
+          rows="4"
+          placeholder="{% if current_lang == 'zh' %}例如：今天小王上了1小时，练了发球和步伐，状态不错，下次加强反手{% else %}e.g. Today Alex trained for 1 hour: serves and footwork, feeling good, next time improve backhand{% endif %}"
+          required
+        >{{ form.lesson_text }}</textarea>
+      </div>
+
+      {% if not new_student %}
+      <div class="field">
+        <label>{% if current_lang == "zh" %}本次课程模式{% else %}Class type (this lesson){% endif %}</label>
+        <select name="class_type" id="classTypeSelect">
+          <option value="">{% if current_lang == "zh" %}自动{% else %}Auto{% endif %}</option>
+          {% for ct in ["1:1","1:2","1:3","1:4"] %}
+            <option value="{{ ct }}" {% if (form.class_type or "") == ct %}selected{% endif %}>{{ ct }}</option>
+          {% endfor %}
+        </select>
+        <div class="hint" id="priceHint" style="margin-top:6px; display:none"></div>
+      </div>
+      {% endif %}
+
+      {% if not new_student %}
+      <div class="field">
+        <label>{% if current_lang == "zh" %}场地{% else %}Venue{% endif %}</label>
+        <input
+          id="venueInput"
+          list="venue_list"
+          name="venue"
+          placeholder="{% if current_lang == 'zh' %}选择或输入场地（未识别学员时保持为空）{% else %}Choose or type a venue{% endif %}"
+          value="{{ form.venue or '' }}"
+        />
+        <datalist id="venue_list">
+          {% for v in venues or [] %}
+            <option value="{{ v }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
+      {% endif %}
+
+      <div class="row">
+        <a class="btn" href="{{ url_for('index') }}">{% if current_lang == "zh" %}返回{% else %}Back{% endif %}</a>
+        <button class="btn primary" type="submit">{% if current_lang == "zh" %}智能录入{% else %}Smart input{% endif %}</button>
+      </div>
+    </form>
+
+    {% if new_student %}
+      <hr style="border:none; border-top:1px solid var(--line); margin:16px 0" />
+      <div class="card" style="padding:12px">
+        <h2 style="margin-bottom:6px">{% if current_lang == "zh" %}提示新增：{{ new_student.name }}{% else %}Add new student: {{ new_student.name }}{% endif %}</h2>
+        <p class="muted mini">
+          {% if current_lang == "zh" %}
+            为保证财务统计与课程记录准确，请先到“学员”里新增学员后再录入课程。
+          {% else %}
+            To keep records and finance reports accurate, please add the student in Students first.
+          {% endif %}
+        </p>
+
+        <div class="row" style="margin-top:10px; justify-content:flex-start">
+          <a class="btn primary" href="{{ url_for('add_student', name=new_student.name, next=url_for('record_lesson')) }}">
+            {% if current_lang == "zh" %}去新增学员{% else %}Add student{% endif %}
+          </a>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if not new_student %}
+  <script id="lessonTypePrices" type="application/json">{{ (lesson_type_prices or {}) | tojson }}</script>
+  <script>
+    (function () {
+      const sel = document.getElementById('studentSelect');
+      const hint = document.getElementById('studentDefaultsHint');
+      const ct = document.getElementById('classTypeSelect');
+      const venueInput = document.getElementById('venueInput');
+      const priceHint = document.getElementById('priceHint');
+      let prices = {};
+      try {
+        const el = document.getElementById('lessonTypePrices');
+        prices = el ? JSON.parse(el.textContent || '{}') : {};
+      } catch (e) {
+        prices = {};
+      }
+      if (!sel || !hint) return;
+
+      function renderPrice() {
+        if (!priceHint || !ct) return;
+        const code = (ct.value || '').trim();
+        const p = prices[code];
+        if (!code || !p) {
+          priceHint.style.display = 'none';
+          priceHint.textContent = '';
+          return;
+        }
+        const amt = Number(p.price_per_lesson || 0);
+        const cur = (p.currency || 'SGD');
+        priceHint.style.display = 'block';
+        priceHint.textContent = '{% if current_lang == "zh" %}单价（每人/次）：{% else %}Price (per person/lesson): {% endif %}' + (amt ? amt.toFixed(0) : '0') + ' ' + cur;
+      }
+
+      function render() {
+        const opt = sel.options[sel.selectedIndex];
+        const name = (opt && opt.textContent) ? opt.textContent.trim() : '';
+        const dct = opt ? (opt.getAttribute('data-default-class-type') || '') : '';
+        const venue = opt ? (opt.getAttribute('data-venue') || '') : '';
+        if (!sel.value) {
+          hint.style.display = 'none';
+          hint.textContent = '';
+          renderPrice();
+          return;
+        }
+        hint.style.display = 'block';
+        hint.textContent =
+          '{% if current_lang == "zh" %}已选择：{% else %}Selected: {% endif %}' +
+          name +
+          ' · {% if current_lang == "zh" %}默认课程{% else %}default{% endif %}: ' + (dct || '—') +
+          ' · {% if current_lang == "zh" %}常用场地{% else %}venue{% endif %}: ' + (venue || '—');
+
+        // On student change: always refresh defaults to the new student's values.
+        if (ct) {
+          const normCt = String(dct || '').replace(/：/g, ':').trim();
+          let applied = false;
+          for (let i = 0; i < ct.options.length; i++) {
+            const ov = String(ct.options[i].value || '').replace(/：/g, ':').trim();
+            if (ov && ov === normCt) {
+              ct.selectedIndex = i;
+              applied = true;
+              break;
+            }
+          }
+          if (!applied) ct.value = normCt || '';
+        }
+        if (venueInput) venueInput.value = venue || '';
+        renderPrice();
+      }
+
+      sel.addEventListener('change', render);
+      if (ct) ct.addEventListener('change', renderPrice);
+      render();
+    })();
+  </script>
+  {% endif %}
+{% endblock %}
+

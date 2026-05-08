@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}学员进度 - {{ name }}{% else %}Student Progress - {{ name }}{% endif %}{% endblock %}
+
+{% block content %}
+  <style>
+    .pager{display:flex; overflow:auto; gap:12px; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch}
+    .page{min-width:100%; scroll-snap-align:start}
+    .mini{font-size:12px}
+  </style>
+
+  <div class="card">
+    <div class="row">
+      <h2>{{ name }}</h2>
+      <a class="btn" href="{{ url_for('students_hub') }}">{% if current_lang == "zh" %}返回{% else %}Back{% endif %}</a>
+    </div>
+    <div class="muted mini" style="margin-top:6px">
+      {% if current_lang == "zh" %}
+        已上课：<strong>{{ summary.total_lessons }}</strong> 节
+        {% if summary.last_lesson_date %} · 上次上课：<strong>{{ summary.last_lesson_date }}</strong>{% endif %}
+      {% else %}
+        Lessons taken: <strong>{{ summary.total_lessons }}</strong>
+        {% if summary.last_lesson_date %} · Last lesson: <strong>{{ summary.last_lesson_date }}</strong>{% endif %}
+      {% endif %}
+    </div>
+    <div class="muted mini">
+      {% if current_lang == "zh" %}
+        最近 10 条课程记录，左右滑动加载更多。
+      {% else %}
+        Latest 10 lessons. Swipe to load more.
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    {% if lessons|length == 0 %}
+      <p class="muted">{% if current_lang == "zh" %}暂无课程记录。{% else %}No lessons yet.{% endif %}</p>
+    {% else %}
+      <div class="pager" aria-label="Lesson pager">
+        {% for i in range(0, lessons|length, 10) %}
+          <div class="page">
+            <div style="overflow:auto; border-radius:12px; border:1px solid var(--line)">
+              <table class="table" style="min-width:760px">
+                <thead>
+                  <tr>
+                    <th style="width:190px">{% if current_lang == "zh" %}时间{% else %}Time{% endif %}</th>
+                    <th>{% if current_lang == "zh" %}内容{% else %}Content{% endif %}</th>
+                    <th style="width:110px">{% if current_lang == "zh" %}查看更多{% else %}Details{% endif %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for l in lessons[i:i+10] %}
+                    <tr>
+                      <td class="muted">{{ (l.date or "")[:10] }}</td>
+                      <td class="muted">
+                        {% set bits = [] %}
+                        {% if l.training %}{% set _ = bits.append(l.training) %}{% endif %}
+                        {% if l.status %}{% set _ = bits.append(l.status) %}{% endif %}
+                        {% if l.next_plan_time %}{% set _ = bits.append((current_lang=='zh' and '下次：' or 'Next: ') ~ l.next_plan_time) %}{% endif %}
+                        {% if l.next_plan %}{% set _ = bits.append(l.next_plan) %}{% endif %}
+                        {{ bits|join(' · ') if bits|length else '—' }}
+                      </td>
+                      <td><a href="{{ url_for('edit_lesson', lesson_id=l.id) }}">{% if current_lang == "zh" %}查看更多{% else %}View{% endif %}</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="muted mini" style="margin-top:8px">
+              {% if current_lang == "zh" %}
+                左右滑动加载更多（第 {{ (i//10)+1 }} / {{ ((lessons|length + 9)//10) }} 页）
+              {% else %}
+                Swipe to load more (Page {{ (i//10)+1 }} / {{ ((lessons|length + 9)//10) }})
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+

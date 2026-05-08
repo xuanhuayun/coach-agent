@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}本月课程明细{% else %}Monthly lessons{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="row">
+      <h2>{% if current_lang == "zh" %}课程明细{% else %}Lesson list{% endif %} — {{ month }}</h2>
+      <a class="btn" href="{{ url_for('stats', month=month) }}">{% if current_lang == "zh" %}返回财务{% else %}Back to stats{% endif %}</a>
+    </div>
+    <p class="muted">
+      {% if current_lang == "zh" %}
+        显示本月每节课：时间、学员、费用（每人 / 总计）。
+      {% else %}
+        Each lesson: time, students, fee (per person / total).
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="card">
+    {% if lessons|length == 0 %}
+      <p class="muted">{% if current_lang == "zh" %}本月暂无课程{% else %}No lessons this month{% endif %}</p>
+    {% else %}
+      <div style="overflow:auto; border-radius:12px; border:1px solid var(--line)">
+        <table class="table" style="min-width:980px">
+          <thead>
+            <tr>
+              <th>{% if current_lang == "zh" %}时间{% else %}Time{% endif %}</th>
+              <th>{% if current_lang == "zh" %}学员{% else %}Students{% endif %}</th>
+              <th>{% if current_lang == "zh" %}场地{% else %}Venue{% endif %}</th>
+              <th>{% if current_lang == "zh" %}类型{% else %}Type{% endif %}</th>
+              <th>{% if current_lang == "zh" %}小时{% else %}Hours{% endif %}</th>
+              <th>{% if current_lang == "zh" %}人数{% else %}People{% endif %}</th>
+              <th>{% if current_lang == "zh" %}每人费用{% else %}Per person{% endif %}</th>
+              <th>{% if current_lang == "zh" %}总费用{% else %}Total{% endif %}</th>
+              <th>{% if current_lang == "zh" %}编辑{% else %}Edit{% endif %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in lessons %}
+              <tr>
+                <td class="muted">{{ (l.time or "")[:10] }}</td>
+                <td>{{ l.students }}</td>
+                <td class="muted">{{ l.venue or "—" }}</td>
+                <td class="muted">{{ l.class_type }}</td>
+                <td class="muted">{{ "%.2f"|format(l.hours) }}</td>
+                <td class="muted">{{ l.participants }}</td>
+                <td class="muted">{{ "%.2f"|format(l.per_person_fee) }} {{ l.currency }}</td>
+                <td class="muted">{{ "%.2f"|format(l.total_fee) }} {{ l.currency }}</td>
+                <td><a href="{{ url_for('edit_lesson', lesson_id=l.id) }}">{% if current_lang == "zh" %}编辑{% else %}Edit{% endif %}</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+

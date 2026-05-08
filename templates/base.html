@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="{% if current_lang == 'zh' %}zh-CN{% else %}en{% endif %}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{% block title %}{{ t("app_name") }}{% endblock %}</title>
+    <style>
+      :root{
+        --bg:#0b1220; --card:#111a2e; --text:#e8eefc; --muted:#a7b4d3;
+        --line:rgba(255,255,255,.10); --accent:#7aa2ff; --good:#44d7a8; --bad:#ff6b6b;
+      }
+      *{box-sizing:border-box}
+      body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial;
+        background: radial-gradient(1200px 800px at 20% 10%, #1a2750, var(--bg));
+        color:var(--text);}
+      a{color:var(--accent); text-decoration:none}
+      a:hover{text-decoration:underline}
+      .container{max-width:980px; margin:0 auto; padding:24px}
+      @media (max-width: 600px){
+        .container{max-width:100%; padding:12px}
+      }
+      .topbar{display:flex; gap:12px; align-items:center; justify-content:space-between; margin-bottom:18px}
+      .brand{font-weight:700; letter-spacing:.3px}
+      .nav{display:flex; gap:10px; flex-wrap:wrap}
+      .nav-right{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+      .pill{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid var(--line);
+        background:rgba(255,255,255,.04); border-radius:999px}
+      .pill.active{border-color:rgba(122,162,255,.45); background:rgba(122,162,255,.16)}
+      .grid{display:grid; grid-template-columns: 1.2fr .8fr; gap:16px}
+      @media (max-width: 860px){ .grid{grid-template-columns:1fr} }
+      .card{background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:14px; padding:16px}
+      .card h2{margin:0 0 12px; font-size:16px}
+      .muted{color:var(--muted)}
+      .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between}
+      .table{width:100%; border-collapse:collapse}
+      .table th,.table td{padding:10px 8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top}
+      .badge{display:inline-flex; align-items:center; padding:4px 8px; border-radius:999px; font-size:12px;
+        border:1px solid var(--line); background:rgba(255,255,255,.04)}
+      .badge.good{border-color:rgba(68,215,168,.35); background:rgba(68,215,168,.12); color:var(--good)}
+      .badge.bad{border-color:rgba(255,107,107,.35); background:rgba(255,107,107,.12); color:var(--bad)}
+      .btn{display:inline-flex; align-items:center; justify-content:center; padding:10px 12px; border-radius:10px;
+        border:1px solid var(--line); background:rgba(255,255,255,.06); color:var(--text); cursor:pointer}
+      .btn:hover{background:rgba(255,255,255,.10)}
+      .btn.primary{border-color:rgba(122,162,255,.35); background:rgba(122,162,255,.16)}
+      .form{display:grid; gap:10px}
+      .field{display:grid; gap:6px}
+      label{font-size:13px; color:var(--muted)}
+      input, select, textarea{width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--line);
+        background:rgba(17,26,46,.6); color:var(--text); outline:none}
+      input::placeholder, textarea::placeholder{color:rgba(167,180,211,.55)}
+      .hint{color:rgba(167,180,211,.60); font-size:12px}
+      textarea{min-height:90px; resize:vertical}
+      .error{padding:10px 12px; border-radius:12px; border:1px solid rgba(255,107,107,.35);
+        background:rgba(255,107,107,.12); color:var(--bad)}
+      .footer{margin-top:18px; color:var(--muted); font-size:12px}
+      code{background:rgba(255,255,255,.06); padding:2px 6px; border-radius:8px; border:1px solid var(--line)}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="topbar">
+        <div class="brand"><a href="{{ url_for('index') }}">{{ t("app_name") }}</a></div>
+        <div class="nav-right">
+          <div class="nav">
+            <a class="pill" href="{{ url_for('index') }}">{% if current_lang == "zh" %}首页{% else %}Home{% endif %}</a>
+            <a class="pill" href="{{ url_for('students_hub') }}">{% if current_lang == "zh" %}学员{% else %}Students{% endif %}</a>
+            <a class="pill" href="{{ url_for('stats') }}">{% if current_lang == "zh" %}财务{% else %}Finance{% endif %}</a>
+            <a class="pill" href="{{ url_for('settings') }}">{% if current_lang == "zh" %}设置{% else %}Settings{% endif %}</a>
+          </div>
+        </div>
+      </div>
+
+      {% block content %}{% endblock %}
+
+      <div class="footer">
+        {% if current_lang == "zh" %}
+          数据保存在 <code>coach_data.json</code>（本地文件）。
+        {% else %}
+          Data is stored in <code>coach_data.json</code> (local file).
+        {% endif %}
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // Venue prompt helper:
+        // - If user enters a venue not in configured list, ask to add it.
+        // - If user declines, remember in localStorage to avoid re-asking.
+        function norm(s){ return (s || '').trim().toLowerCase(); }
+        const LS_KEY = 'coach_agent_declined_venues_v1';
+
+        function getDeclined(){
+          try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e){ return []; }
+        }
+        function setDeclined(list){
+          try { localStorage.setItem(LS_KEY, JSON.stringify(list.slice(0, 200))); } catch(e){}
+        }
+
+        async function addVenue(venue){
+          const res = await fetch('{{ url_for("add_venue") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ venue })
+          });
+          if (!res.ok) return null;
+          return await res.json();
+        }
+
+        function attach(el){
+          if (!el || el.dataset.venuePromptAttached === '1') return;
+          el.dataset.venuePromptAttached = '1';
+
+          el.addEventListener('change', async () => {
+            const v = (el.value || '').trim();
+            if (!v) return;
+
+            // check datalist options
+            const listId = el.getAttribute('list');
+            const dl = listId ? document.getElementById(listId) : null;
+            const options = dl ? Array.from(dl.querySelectorAll('option')).map(o => (o.value || '').trim()) : [];
+            const exists = options.some(o => norm(o) === norm(v));
+            if (exists) return;
+
+            const declined = getDeclined();
+            if (declined.includes(norm(v))) return;
+
+            const msg = `{% if current_lang == "zh" %}检测到新场地“${v}”。要加入到场地列表吗？\n选择“不加入”后下次不会再提示。{% else %}New venue “${v}” detected. Add it to the venue list?\nIf you choose “No”, you won't be asked again next time.{% endif %}`;
+            const yes = window.confirm(msg);
+            if (!yes) {
+              declined.push(norm(v));
+              setDeclined(declined);
+              return;
+            }
+
+            const data = await addVenue(v);
+            if (!data || !data.ok) return;
+
+            // update datalist in-place so it won't prompt again
+            if (dl) {
+              const opt = document.createElement('option');
+              opt.value = v;
+              dl.appendChild(opt);
+            }
+          });
+        }
+
+        // Attach to any venue input on the page
+        document.addEventListener('DOMContentLoaded', () => {
+          document.querySelectorAll('input[name="venue"]').forEach(attach);
+        });
+      })();
+    </script>
+  </body>
+</html>
+

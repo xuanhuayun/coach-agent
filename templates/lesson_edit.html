@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == "zh" %}编辑课程记录{% else %}Edit Lesson{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="row">
+      <h2>{% if current_lang == "zh" %}编辑课程记录{% else %}Edit Lesson{% endif %}</h2>
+      <a class="btn" href="{{ url_for('index') }}">{% if current_lang == "zh" %}返回{% else %}Back{% endif %}</a>
+    </div>
+
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form class="form" method="post" action="{{ url_for('edit_lesson', lesson_id=lesson.id) }}">
+      <div class="field">
+        <label>{% if current_lang == "zh" %}课程分类{% else %}Class type{% endif %}</label>
+        <select name="class_type" id="classTypeSelect">
+          <option value="">{% if current_lang == "zh" %}请选择{% else %}Select{% endif %}</option>
+          {% for ct in ["1:1","1:2","1:3","1:4"] %}
+            <option value="{{ ct }}" {% if (lesson.class_type or "") == ct %}selected{% endif %}>{{ ct }}</option>
+          {% endfor %}
+        </select>
+        <div class="hint" id="priceHint" style="margin-top:6px; display:none"></div>
+      </div>
+      <div class="field">
+        <label>{% if current_lang == "zh" %}学员姓名{% else %}Student{% endif %}</label>
+        <input id="studentInput" list="student_list" name="student" value="{{ lesson.student or '' }}" placeholder="{% if current_lang == 'zh' %}例如：Amy{% else %}e.g. Amy{% endif %}" />
+        <datalist id="student_list">
+          {% for s in students %}
+            <option value="{{ s }}"></option>
+          {% endfor %}
+        </datalist>
+        <div class="hint" id="studentDefaultsHint" style="margin-top:6px; display:none"></div>
+      </div>
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}场地{% else %}Venue{% endif %}</label>
+        <select name="venue" id="venueSelect">
+          <option value="">{% if current_lang == "zh" %}请选择{% else %}Select{% endif %}</option>
+          {% for v in venues or [] %}
+            <option value="{{ v }}" {% if (lesson.venue or "") == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px">
+        <div class="field">
+          <label>{% if current_lang == "zh" %}时长{% else %}Duration{% endif %}</label>
+          <div id="durationDisplay" class="muted" style="padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.03)">
+            {{ lesson.duration or "—" }}
+          </div>
+        </div>
+        <div class="field">
+          <label>{% if current_lang == "zh" %}日期时间{% else %}Date/time{% endif %}</label>
+          <input name="date" value="{{ lesson.date or '' }}" placeholder="YYYY-MM-DD HH:MM" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}训练内容{% else %}Training{% endif %}</label>
+        <input name="training" value="{{ lesson.training or '' }}" placeholder="{% if current_lang == 'zh' %}例如：反手、高远球{% else %}e.g. backhand, clear{% endif %}" />
+      </div>
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}学员状态{% else %}Status{% endif %}</label>
+        <input name="status" value="{{ lesson.status or '' }}" placeholder="{% if current_lang == 'zh' %}例如：有进步{% else %}e.g. improved{% endif %}" />
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 2fr; gap:12px">
+        <div class="field">
+          <label>{% if current_lang == "zh" %}下次时间{% else %}Next plan time{% endif %}</label>
+          <input type="date" name="next_plan_time" value="{{ lesson.next_plan_time or '' }}" />
+        </div>
+        <div class="field">
+          <label>{% if current_lang == "zh" %}下次计划{% else %}Next plan{% endif %}</label>
+          <input name="next_plan" value="{{ lesson.next_plan or '' }}" placeholder="{% if current_lang == 'zh' %}例如：重点练步伐和启动{% else %}e.g. focus on footwork and split-step{% endif %}" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>{% if current_lang == "zh" %}原始记录{% else %}Original note{% endif %}</label>
+        <textarea name="original_text" rows="4" placeholder="{% if current_lang == 'zh' %}粘贴你最原始的一句话记录{% else %}Paste the original one-sentence note{% endif %}">{{ lesson.original_text or '' }}</textarea>
+      </div>
+
+      <div class="row">
+        <a class="btn" href="{{ url_for('index') }}">{% if current_lang == "zh" %}取消{% else %}Cancel{% endif %}</a>
+        <button class="btn primary" type="submit">{% if current_lang == "zh" %}保存修改{% else %}Save changes{% endif %}</button>
+      </div>
+    </form>
+
+    {% if can_delete %}
+      <form
+        method="post"
+        action="{{ url_for('delete_lesson', lesson_id=lesson.id) }}"
+        onsubmit="return confirm({% if current_lang == 'zh' %}'确定要删除这条课程记录吗？此操作不可撤销。'{% else %}'Delete this lesson record? This cannot be undone.'{% endif %});"
+        style="margin-top:12px"
+      >
+        <input type="hidden" name="next" value="{{ request.referrer or url_for('index') }}" />
+        <button class="btn" type="submit" style="background:#ff4d4f; border-color:#ff4d4f; color:#fff">
+          {% if current_lang == "zh" %}删除课程记录{% else %}Delete lesson{% endif %}
+        </button>
+      </form>
+    {% else %}
+      <div class="muted" style="margin-top:12px">
+        {% if current_lang == "zh" %}
+          为保证数据一致性与统计准确性，系统不支持删除超过最近一个月的课程记录。请联系管理员。
+        {% else %}
+          To keep data consistent and reports accurate, deleting lessons older than the most recent 30 days is disabled. Please contact the administrator.
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <script id="studentDefaults" type="application/json">{{ (student_defaults or {}) | tojson }}</script>
+  <script id="lessonTypePrices" type="application/json">{{ (lesson_type_prices or {}) | tojson }}</script>
+  <script>
+    (function () {
+      let defaults = {};
+      let prices = {};
+      try {
+        const dEl = document.getElementById('studentDefaults');
+        defaults = dEl ? JSON.parse(dEl.textContent || '{}') : {};
+      } catch (e) {
+        defaults = {};
+      }
+      try {
+        const pEl = document.getElementById('lessonTypePrices');
+        prices = pEl ? JSON.parse(pEl.textContent || '{}') : {};
+      } catch (e) {
+        prices = {};
+      }
+      const input = document.getElementById('studentInput');
+      const hint = document.getElementById('studentDefaultsHint');
+      const ct = document.getElementById('classTypeSelect');
+      const venue = document.getElementById('venueSelect');
+      const priceHint = document.getElementById('priceHint');
+      const durationEl = document.getElementById('durationDisplay');
+      if (!input || !hint) return;
+
+      // Build a case-insensitive lookup for student defaults
+      const defaultsLower = {};
+      try {
+        Object.keys(defaults || {}).forEach((k) => {
+          defaultsLower[String(k || '').trim().toLowerCase()] = defaults[k];
+        });
+      } catch (e) {}
+
+      function getStudentDefaults(name) {
+        const n = String(name || '').trim();
+        if (!n) return null;
+        if (defaults && Object.prototype.hasOwnProperty.call(defaults, n)) return defaults[n];
+        const low = n.toLowerCase();
+        return defaultsLower[low] || null;
+      }
+
+      function renderDuration() {
+        if (!durationEl || !ct) return;
+        const code = (ct.value || '').trim();
+        if (!code) {
+          durationEl.textContent = '{% if current_lang == "zh" %}未说明{% else %}—{% endif %}';
+          return;
+        }
+        const minutes = (code === '1:1') ? 60 : 120;
+        durationEl.textContent = (minutes === 60)
+          ? '{% if current_lang == "zh" %}1小时{% else %}1h{% endif %}'
+          : '{% if current_lang == "zh" %}2小时{% else %}2h{% endif %}';
+      }
+
+      function renderPrice() {
+        if (!priceHint || !ct) return;
+        const code = (ct.value || '').trim();
+        const p = prices[code];
+        if (!code || !p) {
+          priceHint.style.display = 'none';
+          priceHint.textContent = '';
+          return;
+        }
+        const amt = Number(p.price_per_lesson || 0);
+        const cur = (p.currency || 'SGD');
+        priceHint.style.display = 'block';
+        priceHint.textContent = '{% if current_lang == "zh" %}单价（每人/次）：{% else %}Price (per person/lesson): {% endif %}' + (amt ? amt.toFixed(0) : '0') + ' ' + cur;
+      }
+
+      function apply() {
+        const name = (input.value || '').trim();
+        const d = getStudentDefaults(name);
+        if (!name || !d) {
+          hint.style.display = 'none';
+          hint.textContent = '';
+          renderPrice();
+          renderDuration();
+          return;
+        }
+        hint.style.display = 'block';
+        hint.textContent =
+          '{% if current_lang == "zh" %}默认课程：{% else %}Default class: {% endif %}' +
+          (d.default_class_type || '—') +
+          ' · {% if current_lang == "zh" %}常用场地：{% else %}Venue: {% endif %}' +
+          (d.venue || '—');
+
+        // On student change: always refresh defaults to the new student's values.
+        const normCt = String(d.default_class_type || '').replace(/：/g, ':').trim();
+        if (ct) {
+          // robustly set select value (handles mismatched/normalized values)
+          let applied = false;
+          for (let i = 0; i < ct.options.length; i++) {
+            const ov = String(ct.options[i].value || '').replace(/：/g, ':').trim();
+            if (ov && ov === normCt) {
+              ct.selectedIndex = i;
+              applied = true;
+              break;
+            }
+          }
+          if (!applied) ct.value = normCt || '';
+        }
+        if (venue) venue.value = d.venue || '';
+        renderPrice();
+        renderDuration();
+      }
+
+      // datalist selection often fires 'input' instead of 'change'
+      let t = null;
+      function debounceApply() {
+        if (t) clearTimeout(t);
+        t = setTimeout(apply, 120);
+      }
+      input.addEventListener('input', debounceApply);
+      input.addEventListener('change', apply);
+      input.addEventListener('blur', apply);
+      if (ct) ct.addEventListener('change', () => { renderPrice(); renderDuration(); });
+      apply();
+    })();
+  </script>
+{% endblock %}
+
