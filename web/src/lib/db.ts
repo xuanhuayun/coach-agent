@@ -48,7 +48,16 @@ function ensureShape(db: unknown): CoachDb {
 }
 
 export async function readDb(): Promise<CoachDb> {
-  const raw = await fs.readFile(DB_PATH, "utf-8");
+  let raw: string;
+  try {
+    raw = await fs.readFile(DB_PATH, "utf-8");
+  } catch (e: any) {
+    if (e && (e.code === "ENOENT" || e.code === "ENOTDIR")) {
+      // In serverless environments (e.g., Vercel) this file won't exist.
+      return ensureShape({ schema_version: 1 });
+    }
+    throw e;
+  }
   const parsed = JSON.parse(raw);
   const db = ensureShape(parsed);
   // light normalization

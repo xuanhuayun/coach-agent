@@ -1,15 +1,33 @@
 import Link from "next/link";
 import { readDb, todayKey } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import type { Lesson, Student } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const db = await readDb();
   const today = todayKey();
-  const todays = db.lessons
-    .filter((l) => String(l?.start_at || "").startsWith(today))
-    .slice()
-    .sort((a, b) => String(a.start_at || "").localeCompare(String(b.start_at || "")));
+  const supa = supabaseAdmin();
 
-  const studentById = new Map(db.students.map((s) => [String(s.id), s]));
+  let todays: Lesson[] = [];
+  let studentById = new Map<string, Student>();
+
+  if (supa) {
+    const [{ data: lessons }, { data: students }] = await Promise.all([
+      supa.from("lessons").select("*").like("start_at", `${today}%`),
+      supa.from("students").select("*"),
+    ]);
+    todays = (lessons || []) as Lesson[];
+    todays.sort((a, b) => String(a.start_at || "").localeCompare(String(b.start_at || "")));
+    studentById = new Map(((students || []) as Student[]).map((s) => [String(s.id), s]));
+  } else {
+    const db = await readDb();
+    todays = db.lessons
+      .filter((l) => String(l?.start_at || "").startsWith(today))
+      .slice()
+      .sort((a, b) => String(a.start_at || "").localeCompare(String(b.start_at || "")));
+    studentById = new Map(db.students.map((s) => [String(s.id), s]));
+  }
   return (
     <main style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
