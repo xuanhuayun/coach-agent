@@ -2,6 +2,7 @@ import Link from "next/link";
 import { readDb, todayKey } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import type { Lesson, Student } from "@/lib/types";
+import { SmartLessonForm } from "@/app/components/SmartLessonForm";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +12,32 @@ export default async function Home() {
 
   let todays: Lesson[] = [];
   let studentById = new Map<string, Student>();
+  let students: Student[] = [];
+  let venues: string[] = [];
+  const lessonTypePrices: Record<string, { price_per_lesson: number; currency: string }> = {};
 
   if (supa) {
-    const [{ data: lessons }, { data: students }] = await Promise.all([
+    const [{ data: lessons }, { data: studentsData }, { data: lessonTypes }, { data: coaches }] = await Promise.all([
       supa.from("lessons").select("*").like("start_at", `${today}%`),
       supa.from("students").select("*"),
+      supa.from("lesson_types").select("*"),
+      supa.from("coaches").select("*").limit(1),
     ]);
     todays = (lessons || []) as Lesson[];
     todays.sort((a, b) => String(a.start_at || "").localeCompare(String(b.start_at || "")));
-    studentById = new Map(((students || []) as Student[]).map((s) => [String(s.id), s]));
+    students = (studentsData || []) as Student[];
+    studentById = new Map(students.map((s) => [String(s.id), s]));
+    const coach0: any = Array.isArray(coaches) && coaches.length ? coaches[0] : null;
+    const v = Array.isArray(coach0?.venues) ? coach0.venues : [];
+    venues = v.map((x: any) => String(x || "")).filter((x: string) => x.trim());
+    for (const lt of (lessonTypes || []) as any[]) {
+      const code = String(lt?.code || "");
+      if (!code) continue;
+      lessonTypePrices[code] = {
+        price_per_lesson: Number(lt?.price_per_lesson || 0),
+        currency: String(lt?.currency || "SGD"),
+      };
+    }
   } else {
     const db = await readDb();
     todays = db.lessons
@@ -27,6 +45,16 @@ export default async function Home() {
       .slice()
       .sort((a, b) => String(a.start_at || "").localeCompare(String(b.start_at || "")));
     studentById = new Map(db.students.map((s) => [String(s.id), s]));
+    students = db.students as any;
+    venues = (db.coaches?.[0]?.venues as any) || [];
+    for (const lt of (db.lesson_types as any[]) || []) {
+      const code = String(lt?.code || "");
+      if (!code) continue;
+      lessonTypePrices[code] = {
+        price_per_lesson: Number(lt?.price_per_lesson || 0),
+        currency: String(lt?.currency || "SGD"),
+      };
+    }
   }
   return (
     <main style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
@@ -36,6 +64,15 @@ export default async function Home() {
           <Link href="/">Home</Link>
         </div>
       </div>
+
+      <section style={{ marginTop: 16 }}>
+        <SmartLessonForm
+          students={students.map((s) => ({ id: String(s.id), name: String(s.name), default_class_type: String((s as any).default_class_type || ""), venue: String((s as any).venue || "") }))}
+          venues={venues}
+          lessonTypePrices={lessonTypePrices}
+          onCreated={undefined}
+        />
+      </section>
 
       <section style={{ marginTop: 16 }}>
         <h2 style={{ fontSize: 14, opacity: 0.8 }}>Today’s lessons</h2>
